@@ -1,0 +1,102 @@
+'use client';
+
+import { useRef, useState } from 'react';
+import { FaceDetector, FilesetResolver, type DetectionResult } from '@mediapipe/tasks-vision';
+
+export default function Page() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [detector, setDetector] = useState<FaceDetector | null>(null);
+
+  async function ensureDetector() {
+    if (detector) return detector;
+     const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm'
+    );
+    // promeni longrange kad izadje
+    const det = await FaceDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath:
+          'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite',
+        delegate: 'GPU',
+      },
+      runningMode: 'IMAGE',
+    });
+    setDetector(det);
+    return det;
+  }
+
+  async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = async () => {
+      try {
+        const c = canvasRef.current!;
+        const ctx = c.getContext('2d')!;
+        c.width = img.width;
+        c.height = img.height;
+        ctx.clearRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0);
+
+        const det = await ensureDetector();
+        const result: DetectionResult = await det.detect(img);
+
+        // blur detected box
+        for (const d of result.detections) {
+          const b = d.boundingBox;
+          if (!b) continue;
+          const x = Math.max(0, Math.floor(b.originX));
+          const y = Math.max(0, Math.floor(b.originY));
+          const w = Math.max(1, Math.floor(b.width));
+          const h = Math.max(1, Math.floor(b.height));
+
+          // replace
+          const tmp = document.createElement('canvas');
+          tmp.width = w; tmp.height = h;
+          const tctx = tmp.getContext('2d')!;
+          tctx.drawImage(c, x, y, w, h, 0, 0, w, h);
+
+          ctx.save();
+          ctx.filter = 'blur(18px)';
+          ctx.drawImage(tmp, x, y, w, h);
+          ctx.restore();
+        }
+      } finally {
+        setBusy(false);
+        URL.revokeObjectURL(img.src);
+      }
+    };
+    img.onerror = () => setBusy(false);
+  }
+
+  function onDownload() {
+    const c = canvasRef.current;
+    if (!c) return;
+    const a = document.createElement('a');
+    a.download = 'anonymized.png';
+    a.href = c.toDataURL('image/png');
+    a.click();
+  }
+
+  return (
+    <main style={{ padding: 20, fontFamily: 'system-ui' }}>
+      <h1>Faceblur</h1>
+      <input type="file" accept="image/*" onChange={onChange} disabled={busy} />
+      <div style={{ marginTop: 12 }}>
+        <button onClick={onDownload} disabled={busy || !canvasRef.current}>
+          Download  
+        </button>
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <canvas
+          ref={canvasRef}
+          style={{ maxWidth: '100%', border: '1px solid #ccc', borderRadius: 8 }}
+        />
+      </div>
+    </main>
+  );
+}
