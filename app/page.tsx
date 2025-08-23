@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
+import * as Select from '@radix-ui/react-select';
+import * as Slider from '@radix-ui/react-slider';
+import * as Label from '@radix-ui/react-label';
+import { BlurIcon, PixelateIcon, BoxIcon } from '@/components/Icons';
 
 type Box = { x: number; y: number; width: number; height: number };
 type Mode = 'blur' | 'pixelate' | 'box';
@@ -13,6 +17,7 @@ export default function Page() {
 
   const [modelsReady, setModelsReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [fileName, setFileName] = useState('No file selected.');
 
   const [mode, setMode] = useState<Mode>('blur');
   const [blurPx, setBlurPx] = useState(12);
@@ -35,10 +40,10 @@ export default function Page() {
     drawWithMode(imgRef.current, boxesRef.current);
   }, [mode, blurPx, pixelSize]);
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleFile(file: File | null) {
     if (!file) return;
     setBusy(true);
+    setFileName(file.name);
 
     const img = new Image();
     img.src = URL.createObjectURL(file);
@@ -154,7 +159,6 @@ export default function Page() {
 
     for (const { x, y, width, height } of boxes) {
       if (mode === 'blur') {
-        // BLUR
         const tmp = document.createElement('canvas');
         tmp.width = width;
         tmp.height = height;
@@ -166,7 +170,6 @@ export default function Page() {
         ctx.drawImage(tmp, x, y);
         ctx.restore();
       } else if (mode === 'pixelate') {
-        // PIXELATE
         const block = Math.max(4, pixelSize);
         const wBlocks = Math.max(1, Math.floor(width / block));
         const hBlocks = Math.max(1, Math.floor(height / block));
@@ -183,11 +186,7 @@ export default function Page() {
         ctx.imageSmoothingEnabled = true;
         ctx.restore();
       } else {
-        // BOX
-        const alpha = Math.max(0.2, Math.min(1, 1)); //opacity
         ctx.save();
-        console.log({alpha})
-        ctx.globalAlpha = alpha;
         ctx.fillStyle = '#000';
         ctx.fillRect(x, y, width, height);
         ctx.restore();
@@ -205,85 +204,128 @@ export default function Page() {
   }
 
   return (
-    <main style={{ padding: 20, fontFamily: 'system-ui' }}>
+    <main className='frame'>
       {!modelsReady ? (
-        <p>Loading...</p>
+        <div className='controls'>
+          <div className='control'>
+            <Label.Root className='metaLabel'>Loading</Label.Root>
+            <div className='input'>Downloading models…</div>
+          </div>
+        </div>
       ) : (
         <>
-          <input
-            type='file'
-            accept='image/*'
-            onChange={handleFileChange}
-            disabled={busy}
-          />
+          <form className='controls' onSubmit={e => e.preventDefault()}>
+            <div className='control span-2'>
+              <Label.Root className='metaLabel' htmlFor='filePick'>
+                Image
+              </Label.Root>
+              <div className='fileWrap'>
+                <label htmlFor='filePick' className='fileBtn'>
+                  Browse…
+                </label>
+                <input
+                  id='filePick'
+                  type='file'
+                  accept='image/*'
+                  onChange={e => handleFile(e.target.files?.[0] ?? null)}
+                  disabled={busy}
+                />
+              </div>
+            </div>
 
-          <div
-            style={{
-              display: 'flex',
-              gap: 16,
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              marginTop: 12,
-            }}
-          >
-            <label>
-               <select
-                value={mode}
-                onChange={e => setMode(e.target.value as Mode)}
+            <div
+              className='modeGrid'
+              role='group'
+              aria-label='Anonymization mode'
+            >
+              <button
+                type='button'
+                className={mode === 'blur' ? 'm active' : 'm'}
+                aria-pressed={mode === 'blur'}
+                onClick={() => setMode('blur')}
               >
-                <option value='blur'>Blur</option>
-                <option value='pixelate'>Pixelate</option>
-                <option value='box'>Solid box</option>
-              </select>
-            </label>
+                <BlurIcon />
+                <span className='mLabel'>Blur</span>
+              </button>
+
+              <button
+                type='button'
+                className={mode === 'pixelate' ? 'm active' : 'm'}
+                aria-pressed={mode === 'pixelate'}
+                onClick={() => setMode('pixelate')}
+              >
+                <PixelateIcon />
+                <span className='mLabel'>Pixelate</span>
+              </button>
+
+              <button
+                type='button'
+                className={mode === 'box' ? 'm active' : 'm'}
+                aria-pressed={mode === 'box'}
+                onClick={() => setMode('box')}
+              >
+                <BoxIcon />
+                <span className='mLabel'>Box</span>
+              </button>
+            </div>
 
             {mode === 'blur' && (
-              <label>
-                Blur:&nbsp;
-                <input
-                  type='range'
+              <div className='control'>
+                <Label.Root className='metaLabel'>Blur</Label.Root>
+                <Slider.Root
+                  className='sliderRoot'
+                  value={[blurPx]}
+                  onValueChange={([v]) => setBlurPx(v)}
                   min={4}
                   max={40}
                   step={1}
-                  value={blurPx}
-                  onChange={e => setBlurPx(parseInt(e.target.value, 10))}
-                />
-                &nbsp;{blurPx}
-              </label>
+                  aria-label='Blur amount'
+                >
+                  <Slider.Track className='sliderTrack'>
+                    <Slider.Range className='sliderRange' />
+                  </Slider.Track>
+                  <Slider.Thumb className='sliderThumb' aria-label='Handle' />
+                </Slider.Root>
+              </div>
             )}
 
             {mode === 'pixelate' && (
-              <label>
-                Pixels:&nbsp;
-                <input
-                  type='range'
+              <div className='control'>
+                <Label.Root className='metaLabel'>Pixel size</Label.Root>
+                <Slider.Root
+                  className='sliderRoot'
+                  value={[pixelSize]}
+                  onValueChange={([v]) => setPixelSize(v)}
                   min={4}
                   max={40}
                   step={2}
-                  value={pixelSize}
-                  onChange={e => setPixelSize(parseInt(e.target.value, 10))}
-                />
-                &nbsp;{pixelSize}
-              </label>
+                  aria-label='Pixel size'
+                >
+                  <Slider.Track className='sliderTrack'>
+                    <Slider.Range className='sliderRange' />
+                  </Slider.Track>
+                  <Slider.Thumb className='sliderThumb' aria-label='Handle' />
+                </Slider.Root>
+              </div>
             )}
 
-            <button onClick={onDownload} disabled={busy}>
-              Download PNG
-            </button>
-          </div>
+            <div className='control span-2'>
+              <button
+                type='button'
+                className='button'
+                onClick={onDownload}
+                disabled={busy}
+              >
+                Download PNG
+              </button>
+            </div>
+          </form>
+
+          <section className='stage'>
+            <canvas ref={canvasRef} className='canvas' />
+          </section>
         </>
       )}
-
-      <div style={{ marginTop: 16 }}>
-        <canvas
-          ref={canvasRef}
-          style={{
-            maxWidth: '100%',
-            border: '1px solid #ccc',
-            borderRadius: 8,
-          }}
-        />
-      </div>
     </main>
   );
 }
