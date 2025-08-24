@@ -39,16 +39,12 @@ export default function Page() {
         <>
           <form className='controls' onSubmit={e => e.preventDefault()}>
             <div className='control span-2'>
-              <UploadButton
-                busy={busy}
-                onPick={handleFile}
-              />
+              <UploadButton busy={busy} onPick={handleFile} />
             </div>
 
             {hasImage && (
               <>
                 <ModePicker mode={mode} setMode={setMode} disabled={busy} />
-
                 {mode === 'blur' && (
                   <IntensitySlider
                     label='Intensity'
@@ -60,7 +56,6 @@ export default function Page() {
                     disabled={busy}
                   />
                 )}
-
                 {mode === 'pixelate' && (
                   <IntensitySlider
                     label='Pixel size'
@@ -72,18 +67,6 @@ export default function Page() {
                     disabled={busy}
                   />
                 )}
-
-                <div className='control span-2'>
-                  <button
-                    type='button'
-                    className='button big'
-                    onClick={downloadPNG}
-                    disabled={busy}
-                    data-testid='btn-dl'
-                  >
-                    Download image
-                  </button>
-                </div>
               </>
             )}
           </form>
@@ -94,6 +77,20 @@ export default function Page() {
             busy={busy}
             onPick={handleFile}
           />
+
+          {hasImage && (
+            <div className='control span-2'>
+              <button
+                type='button'
+                className='button big'
+                onClick={downloadPNG}
+                disabled={busy}
+                data-testid='btn-dl'
+              >
+                Download image
+              </button>
+            </div>
+          )}
         </>
       )}
     </main>
