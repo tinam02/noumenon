@@ -23,6 +23,8 @@ export default function Page() {
   const [blurPx, setBlurPx] = useState(12);
   const [pixelSize, setPixelSize] = useState(16);
 
+  const hasImage = !!imgRef.current;
+
   // recog models
   useEffect(() => {
     (async () => {
@@ -230,99 +232,111 @@ export default function Page() {
                   onChange={e => handleFile(e.target.files?.[0] ?? null)}
                   disabled={busy}
                 />
+                {busy && <div className='spinner'></div>}
               </div>
             </div>
 
-            <div
-              className='modeGrid'
-              role='group'
-              aria-label='Anonymization mode'
-            >
-              <button
-                type='button'
-                className={mode === 'blur' ? 'm active' : 'm'}
-                aria-pressed={mode === 'blur'}
-                onClick={() => setMode('blur')}
-              >
-                <BlurIcon />
-                <span className='mLabel'>Blur</span>
-              </button>
-
-              <button
-                type='button'
-                className={mode === 'pixelate' ? 'm active' : 'm'}
-                aria-pressed={mode === 'pixelate'}
-                onClick={() => setMode('pixelate')}
-              >
-                <PixelateIcon />
-                <span className='mLabel'>Pixelate</span>
-              </button>
-
-              <button
-                type='button'
-                className={mode === 'box' ? 'm active' : 'm'}
-                aria-pressed={mode === 'box'}
-                onClick={() => setMode('box')}
-              >
-                <BoxIcon />
-                <span className='mLabel'>Box</span>
-              </button>
-            </div>
-
-            {mode === 'blur' && (
-              <div className='control'>
-                <Label.Root className='metaLabel'>Blur</Label.Root>
-                <Slider.Root
-                  className='sliderRoot'
-                  value={[blurPx]}
-                  onValueChange={([v]) => setBlurPx(v)}
-                  min={4}
-                  max={40}
-                  step={1}
-                  aria-label='Blur amount'
+            {hasImage && (
+              <>
+                <div
+                  className='modeGrid'
+                  role='group'
+                  aria-label='Anonymization mode'
                 >
-                  <Slider.Track className='sliderTrack'>
-                    <Slider.Range className='sliderRange' />
-                  </Slider.Track>
-                  <Slider.Thumb className='sliderThumb' aria-label='Handle' />
-                </Slider.Root>
-              </div>
-            )}
+                  <button
+                    type='button'
+                    className={mode === 'blur' ? 'm active' : 'm'}
+                    aria-pressed={mode === 'blur'}
+                    onClick={() => setMode('blur')}
+                  >
+                    <BlurIcon />
+                    <span className='mLabel'>Blur</span>
+                  </button>
+                  <button
+                    type='button'
+                    className={mode === 'pixelate' ? 'm active' : 'm'}
+                    aria-pressed={mode === 'pixelate'}
+                    onClick={() => setMode('pixelate')}
+                  >
+                    <PixelateIcon />
+                    <span className='mLabel'>Pixelate</span>
+                  </button>
+                  <button
+                    type='button'
+                    className={mode === 'box' ? 'm active' : 'm'}
+                    aria-pressed={mode === 'box'}
+                    onClick={() => setMode('box')}
+                  >
+                    <BoxIcon />
+                    <span className='mLabel'>Box</span>
+                  </button>
+                </div>
 
-            {mode === 'pixelate' && (
-              <div className='control'>
-                <Label.Root className='metaLabel'>Pixel size</Label.Root>
-                <Slider.Root
-                  className='sliderRoot'
-                  value={[pixelSize]}
-                  onValueChange={([v]) => setPixelSize(v)}
-                  min={4}
-                  max={40}
-                  step={2}
-                  aria-label='Pixel size'
-                >
-                  <Slider.Track className='sliderTrack'>
-                    <Slider.Range className='sliderRange' />
-                  </Slider.Track>
-                  <Slider.Thumb className='sliderThumb' aria-label='Handle' />
-                </Slider.Root>
-              </div>
-            )}
+                {mode === 'blur' && (
+                  <div className='control'>
+                    <Label.Root className='metaLabel'>Blur</Label.Root>
+                    <Slider.Root
+                      className='sliderRoot'
+                      value={[blurPx]}
+                      onValueChange={([v]) => setBlurPx(v)}
+                      min={4}
+                      max={40}
+                      step={1}
+                      aria-label='Blur amount'
+                    >
+                      <Slider.Track className='sliderTrack'>
+                        <Slider.Range className='sliderRange' />
+                      </Slider.Track>
+                      <Slider.Thumb
+                        className='sliderThumb'
+                        aria-label='Handle'
+                      />
+                    </Slider.Root>
+                  </div>
+                )}
 
-            <div className='control span-2'>
-              <button
-                type='button'
-                className='button'
-                onClick={onDownload}
-                disabled={busy}
-              >
-                Download PNG
-              </button>
-            </div>
+                {mode === 'pixelate' && (
+                  <div className='control'>
+                    <Label.Root className='metaLabel'>Pixel size</Label.Root>
+                    <Slider.Root
+                      className='sliderRoot'
+                      value={[pixelSize]}
+                      onValueChange={([v]) => setPixelSize(v)}
+                      min={4}
+                      max={40}
+                      step={2}
+                      aria-label='Pixel size'
+                    >
+                      <Slider.Track className='sliderTrack'>
+                        <Slider.Range className='sliderRange' />
+                      </Slider.Track>
+                      <Slider.Thumb
+                        className='sliderThumb'
+                        aria-label='Handle'
+                      />
+                    </Slider.Root>
+                  </div>
+                )}
+
+                <div className='control span-2'>
+                  <button
+                    type='button'
+                    className='button'
+                    onClick={onDownload}
+                    disabled={busy}
+                  >
+                    Download PNG
+                  </button>
+                </div>
+              </>
+            )}
           </form>
 
           <section className='stage'>
-            <canvas ref={canvasRef} className='canvas' />
+            <canvas
+              ref={canvasRef}
+              className={`canvas ${!hasImage ? 'empty' : ''}`}
+            />
           </section>
         </>
       )}

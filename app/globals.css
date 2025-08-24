@@ -133,16 +133,34 @@ input[type='file'] {
 }
 
 .stage {
-  padding: 12px;
-}
-.canvas {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: var(--hairline) solid var(--border-ink);
-  background: #fafafa;
+  margin-top: 12px;
 }
 
+.spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid #d9d9d9;
+  border-top-color: #2244ff;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.canvas {
+  width: 100%;
+  max-width: 100%;
+  min-width: 300px;
+  border: 1px solid var(--border-ink, #222);
+  background-color: #fff;
+  position: relative;
+}
+.canvas.empty {
+  opacity: 0;
+}
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
