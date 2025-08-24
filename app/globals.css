@@ -48,7 +48,6 @@ body {
   display: grid;
   gap: 10px;
   padding: 12px;
-  border-bottom: var(--hairline) solid var(--border-ink);
 }
 .control {
   display: grid;
@@ -92,15 +91,61 @@ body {
   opacity: 0.45;
   cursor: default;
 }
+.button.big {
+  border-radius: 8px;
+  box-shadow: 3px 3px 0 0 var(--border-ink);
+  padding: 12px 16px;
+  transition: background 0.08s ease, color 0.08s ease, transform 0.02s,
+    box-shadow 0.02s;
+}
 
+.button.big:hover {
+  background: var(--brand);
+  color: #fff;
+}
+
+.button.big:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--border-ink);
+}
 .fileWrap {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
+
 .fileBtn {
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: var(--hairline) solid var(--border-ink);
+  background: #fff;
+  color: var(--ink);
+  text-transform: none;
+  line-height: 1;
 }
+
+.fileBtn.big {
+  border-radius: 8px;
+  box-shadow: 3px 3px 0 0 var(--border-ink);
+  transition: background 0.08s ease, color 0.08s ease, transform 0.02s,
+    box-shadow 0.02s;
+}
+.fileBtn.big:hover {
+  background: var(--brand);
+  color: #fff;
+}
+.fileBtn.big:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--border-ink);
+}
+.fileBtn.big.disabled {
+  background: var(--muted);
+}
+
 input[type='file'] {
   display: none;
 }

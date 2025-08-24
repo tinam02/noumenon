@@ -6,6 +6,7 @@ import * as Select from '@radix-ui/react-select';
 import * as Slider from '@radix-ui/react-slider';
 import * as Label from '@radix-ui/react-label';
 import { BlurIcon, PixelateIcon, BoxIcon } from '@/components/Icons';
+import classNames from 'classnames';
 
 type Box = { x: number; y: number; width: number; height: number };
 type Mode = 'blur' | 'pixelate' | 'box';
@@ -218,13 +219,18 @@ export default function Page() {
         <>
           <form className='controls' onSubmit={e => e.preventDefault()}>
             <div className='control span-2'>
-              <Label.Root className='metaLabel' htmlFor='filePick'>
-                Image
-              </Label.Root>
               <div className='fileWrap'>
-                <label htmlFor='filePick' className='fileBtn'>
-                  Browse…
+                <label
+                  htmlFor='filePick'
+                  className={classNames('fileBtn', 'big', busy && 'disabled')}
+                >
+                  <img
+                    src='https://em-content.zobj.net/source/microsoft/74/open-file-folder_1f4c2.png'
+                    style={{ width: 24 }}
+                  />
+                  <span>{busy ? 'Loading...' : 'Browse image…'}</span>
                 </label>
+
                 <input
                   id='filePick'
                   type='file'
@@ -232,6 +238,7 @@ export default function Page() {
                   onChange={e => handleFile(e.target.files?.[0] ?? null)}
                   disabled={busy}
                 />
+
                 {busy && <div className='spinner'></div>}
               </div>
             </div>
@@ -271,10 +278,9 @@ export default function Page() {
                     <span className='mLabel'>Box</span>
                   </button>
                 </div>
-
                 {mode === 'blur' && (
                   <div className='control'>
-                    <Label.Root className='metaLabel'>Blur</Label.Root>
+                    <Label.Root className='metaLabel'>INTENSITY</Label.Root>
                     <Slider.Root
                       className='sliderRoot'
                       value={[blurPx]}
@@ -294,10 +300,9 @@ export default function Page() {
                     </Slider.Root>
                   </div>
                 )}
-
                 {mode === 'pixelate' && (
                   <div className='control'>
-                    <Label.Root className='metaLabel'>Pixel size</Label.Root>
+                    <Label.Root className='metaLabel'>INTENSITY</Label.Root>
                     <Slider.Root
                       className='sliderRoot'
                       value={[pixelSize]}
@@ -317,11 +322,10 @@ export default function Page() {
                     </Slider.Root>
                   </div>
                 )}
-
                 <div className='control span-2'>
                   <button
                     type='button'
-                    className='button'
+                    className='button big'
                     onClick={onDownload}
                     disabled={busy}
                   >
