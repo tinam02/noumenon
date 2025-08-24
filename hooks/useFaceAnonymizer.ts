@@ -6,6 +6,10 @@ import * as faceapi from 'face-api.js';
 export type Box = { x: number; y: number; width: number; height: number };
 export type Mode = 'blur' | 'pixelate' | 'box';
 
+async function nextFrame() {
+  return new Promise<void>(r => requestAnimationFrame(() => r()));
+}
+
 export function useFaceAnonymizer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -39,9 +43,11 @@ export function useFaceAnonymizer() {
   const handleFile = useCallback(async (file: File | null) => {
     if (!file) return;
     setBusy(true);
+    await nextFrame();
 
+    const url = URL.createObjectURL(file);
     const img = new Image();
-    img.src = URL.createObjectURL(file);
+    img.src = url;
     img.onload = async () => {
       try {
         imgRef.current = img;
@@ -49,8 +55,8 @@ export function useFaceAnonymizer() {
         boxesRef.current = boxes;
         drawWithMode(img, boxes);
       } finally {
-        setBusy(false);
         URL.revokeObjectURL(img.src);
+        setBusy(false);
       }
     };
   }, []);
