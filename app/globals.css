@@ -144,6 +144,8 @@ body {
 }
 .fileBtn.big.disabled {
   background: var(--muted);
+  opacity: 0.45;
+  cursor: default;
 }
 
 input[type='file'] {
