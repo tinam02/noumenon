@@ -10,6 +10,17 @@ async function nextFrame() {
   return new Promise<void>(r => requestAnimationFrame(() => r()));
 }
 
+let modelsPromise: Promise<void> | null = null;
+function ensureModelsLoaded() {
+  if (!modelsPromise) {
+    modelsPromise = Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri('/models/tiny_face_detector'),
+      faceapi.nets.ssdMobilenetv1.loadFromUri('/models/ssd_mobilenetv1'),
+    ]).then(() => {});
+  }
+  return modelsPromise;
+}
+
 export function useFaceAnonymizer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -25,13 +36,7 @@ export function useFaceAnonymizer() {
 
   // models
   useEffect(() => {
-    (async () => {
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri('/models/tiny_face_detector'),
-        faceapi.nets.ssdMobilenetv1.loadFromUri('/models/ssd_mobilenetv1'),
-      ]);
-      setModelsReady(true);
-    })();
+    ensureModelsLoaded().then(() => setModelsReady(true));
   }, []);
 
   // Redraw
@@ -56,6 +61,7 @@ export function useFaceAnonymizer() {
         drawWithMode(img, boxes);
       } finally {
         URL.revokeObjectURL(img.src);
+        setMode('blur'); //reset
         setBusy(false);
       }
     };
@@ -160,13 +166,22 @@ export function useFaceAnonymizer() {
 
     for (const { x, y, width, height } of boxes) {
       if (mode === 'blur') {
+        //rel.  face area
+        const relArea = (width * height) / (img.width * img.height);
+
+        // small faces => higher blur, big faces => less
+        let baseBlur = 10 * relArea * 100;
+        baseBlur = Math.min(Math.max(baseBlur, 6), 30);
+
+        const appliedBlur = baseBlur * (blurPx / 12);
+
         const tmp = document.createElement('canvas');
         tmp.width = width;
         tmp.height = height;
         const tctx = tmp.getContext('2d')!;
         tctx.drawImage(c, x, y, width, height, 0, 0, width, height);
         ctx.save();
-        ctx.filter = `blur(${blurPx}px)`;
+        ctx.filter = `blur(${appliedBlur}px)`;
         ctx.drawImage(tmp, x, y);
         ctx.restore();
       } else if (mode === 'pixelate') {
