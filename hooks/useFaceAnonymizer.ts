@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
-import 'context-filter-polyfill';
 
 export type Box = { x: number; y: number; width: number; height: number };
 export type Mode = 'blur' | 'pixelate' | 'box';
 
-async function nextFrame() {
-  return new Promise<void>(r => requestAnimationFrame(() => r()));
-}
+const MAX_DIM = 1600; // cap giant phone photos
+
+const nextFrame = () =>
+  new Promise<void>(r => requestAnimationFrame(() => r()));
 
 let modelsPromise: Promise<void> | null = null;
 function ensureModelsLoaded() {
@@ -20,6 +20,61 @@ function ensureModelsLoaded() {
     ]).then(() => {});
   }
   return modelsPromise;
+}
+
+function fitSize(w: number, h: number) {
+  const s = Math.min(1, MAX_DIM / Math.max(w, h));
+  return { w: Math.round(w * s), h: Math.round(h * s) };
+}
+
+/** downscale -> upscale */
+function blurDownUp(src: HTMLCanvasElement, radiusPx: number) {
+  const k = Math.min(16, Math.max(2, Math.round(Math.max(1, radiusPx) / 2)));
+  const dw = Math.max(1, Math.floor(src.width / k));
+  const dh = Math.max(1, Math.floor(src.height / k));
+
+  const small = document.createElement('canvas');
+  small.width = dw;
+  small.height = dh;
+  const sctx = small.getContext('2d')!;
+  sctx.imageSmoothingEnabled = true;
+  sctx.drawImage(src, 0, 0, dw, dh);
+
+  const out = document.createElement('canvas');
+  out.width = src.width;
+  out.height = src.height;
+  const octx = out.getContext('2d')!;
+  octx.imageSmoothingEnabled = true;
+  octx.drawImage(small, 0, 0, dw, dh, 0, 0, out.width, out.height);
+  return out;
+}
+
+
+function makeFaceMask(
+  w: number,
+  h: number,
+  faces: Box[],
+  pad: number,//frow
+  feather: number//edge soften
+) {
+  const m = document.createElement('canvas');
+  m.width = w;
+  m.height = h;
+  const mx = m.getContext('2d')!;
+  mx.clearRect(0, 0, w, h);
+
+  //  rects
+  mx.fillStyle = '#fff';
+  for (const { x, y, width, height } of faces) {
+    const rx = Math.max(0, x - pad);
+    const ry = Math.max(0, y - pad);
+    const rw = Math.min(w - rx, width + pad * 2);
+    const rh = Math.min(h - ry, height + pad * 2);
+    mx.fillRect(rx, ry, rw, rh);
+  }
+
+  // blur the mask to create soft edges
+  return blurDownUp(m, feather);
 }
 
 export function useFaceAnonymizer() {
@@ -35,12 +90,10 @@ export function useFaceAnonymizer() {
 
   const hasImage = !!imgRef.current;
 
-  // models
   useEffect(() => {
     ensureModelsLoaded().then(() => setModelsReady(true));
   }, []);
 
-  // Redraw
   useEffect(() => {
     if (!imgRef.current || !boxesRef.current) return;
     drawWithMode(imgRef.current, boxesRef.current);
@@ -52,46 +105,63 @@ export function useFaceAnonymizer() {
     await nextFrame();
 
     const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = url;
-    img.onload = async () => {
+    const raw = new Image();
+    raw.src = url;
+    raw.onload = async () => {
       try {
+        const { w, h } = fitSize(
+          raw.naturalWidth || raw.width,
+          raw.naturalHeight || raw.height
+        );
+        const c0 = document.createElement('canvas');
+        c0.width = w;
+        c0.height = h;
+        c0.getContext('2d')!.drawImage(raw, 0, 0, w, h);
+
+        const img = new Image();
+        img.src = c0.toDataURL('image/jpeg', 0.92);
+        await new Promise(r => (img.onload = () => r(null)));
+
         imgRef.current = img;
         const boxes = await detectAllFacesRobust(img);
         boxesRef.current = boxes;
         drawWithMode(img, boxes);
       } finally {
-        URL.revokeObjectURL(img.src);
-        setMode('blur'); //reset
+        URL.revokeObjectURL(url);
+        setMode('blur'); // reset
         setBusy(false);
       }
     };
   }, []);
 
   async function detectAllFacesRobust(img: HTMLImageElement): Promise<Box[]> {
+    // tf
     const tinyOpts = new faceapi.TinyFaceDetectorOptions({
       inputSize: 512,
       scoreThreshold: 0.1,
     });
     let det = await faceapi.detectAllFaces(img, tinyOpts);
 
+    // SSD if Tiny under-detects
     if (det.length < 4) {
       const ssdOpts = new faceapi.SsdMobilenetv1Options({
         minConfidence: 0.15,
       });
-      det = await faceapi.detectAllFaces(img, ssdOpts);
+      const ssdDet = await faceapi.detectAllFaces(img, ssdOpts);
+      if (ssdDet.length > det.length) det = ssdDet;
     }
 
+    //  upscale + SSD merge if few/small faces
     const smallFaces = det.some(
       d => d.box.width * d.box.height < img.width * img.height * 0.001
     );
     if (det.length < 6 || smallFaces) {
-      const { upscaled, scale } = upscaleImage(img, 2);
+      const { upscaled, scale } = upscaleImage(img, 1.8);
       const ssdOpts = new faceapi.SsdMobilenetv1Options({
         minConfidence: 0.15,
       });
-      const detUpscaled = await faceapi.detectAllFaces(upscaled, ssdOpts);
-      const mapped = detUpscaled.map(d => ({
+      const detUp = await faceapi.detectAllFaces(upscaled, ssdOpts);
+      const mapped = detUp.map(d => ({
         x: Math.round(d.box.x / scale),
         y: Math.round(d.box.y / scale),
         width: Math.round(d.box.width / scale),
@@ -99,7 +169,8 @@ export function useFaceAnonymizer() {
       }));
       return mergeBoxes(
         det.map(d => d.box as faceapi.Box),
-        mapped
+        mapped,
+        0.3
       );
     }
 
@@ -160,32 +231,48 @@ export function useFaceAnonymizer() {
     const ctx = c.getContext('2d');
     if (!ctx) return;
 
+    // base sharp
     c.width = img.width;
     c.height = img.height;
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.drawImage(img, 0, 0);
+    if (boxes.length === 0) return;
 
+    if (mode === 'blur') {
+      // use largest face to scale strength; apply to all w mask
+      const largest = boxes.reduce((a, b) =>
+        a.width * a.height > b.width * b.height ? a : b
+      );
+      const relArea =
+        (largest.width * largest.height) / (img.width * img.height);
+      let base = Math.min(Math.max(10 * relArea * 100, 6), 30);
+      const strength = base * (blurPx / 12);
+
+      // blurred copy of the full img
+      const snap = document.createElement('canvas');
+      snap.width = c.width;
+      snap.height = c.height;
+      snap.getContext('2d')!.drawImage(c, 0, 0);
+      const blurred = blurDownUp(snap, strength);
+
+      // feathered mask over faces
+      const pad = Math.round(Math.min(largest.width, largest.height) * 0.12);
+      const feather = Math.max(8, Math.round(strength * 0.9));
+      const mask = makeFaceMask(c.width, c.height, boxes, pad, feather);
+
+      // clip blurred by mask and draw
+      const bctx = blurred.getContext('2d')!;
+      bctx.globalCompositeOperation = 'destination-in';
+      bctx.drawImage(mask, 0, 0);
+      bctx.globalCompositeOperation = 'source-over';
+
+      ctx.drawImage(blurred, 0, 0);
+      return;
+    }
+
+    // pixelate / box
     for (const { x, y, width, height } of boxes) {
-      if (mode === 'blur') {
-        //rel.  face area
-        const relArea = (width * height) / (img.width * img.height);
-
-        // small faces => higher blur, big faces => less
-        let baseBlur = 10 * relArea * 100;
-        baseBlur = Math.min(Math.max(baseBlur, 6), 30);
-
-        const appliedBlur = baseBlur * (blurPx / 12);
-
-        const tmp = document.createElement('canvas');
-        tmp.width = width;
-        tmp.height = height;
-        const tctx = tmp.getContext('2d')!;
-        tctx.drawImage(c, x, y, width, height, 0, 0, width, height);
-        ctx.save();
-        ctx.filter = `blur(${appliedBlur}px)`;
-        ctx.drawImage(tmp, x, y);
-        ctx.restore();
-      } else if (mode === 'pixelate') {
+      if (mode === 'pixelate') {
         const block = Math.max(4, pixelSize);
         const wBlocks = Math.max(1, Math.floor(width / block));
         const hBlocks = Math.max(1, Math.floor(height / block));
@@ -201,10 +288,8 @@ export function useFaceAnonymizer() {
         ctx.imageSmoothingEnabled = true;
         ctx.restore();
       } else {
-        ctx.save();
         ctx.fillStyle = '#000';
         ctx.fillRect(x, y, width, height);
-        ctx.restore();
       }
     }
   }
@@ -219,17 +304,13 @@ export function useFaceAnonymizer() {
   }
 
   return {
-    // st
     modelsReady,
     busy,
-    // fileName,
     hasImage,
     mode,
     blurPx,
     pixelSize,
-    // refs
     canvasRef,
-    // acts
     setMode,
     setBlurPx,
     setPixelSize,
