@@ -2,107 +2,26 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
+import 'context-filter-polyfill';
 
 export type Box = { x: number; y: number; width: number; height: number };
 export type Mode = 'blur' | 'pixelate' | 'box';
-import '@tensorflow/tfjs-backend-wasm';
-import '@tensorflow/tfjs-backend-webgl';
-
-let _filterOK: boolean | null = null;
-function canvasFilterSupported(): boolean {
-  if (_filterOK != null) return _filterOK;
-  const c = document.createElement('canvas');
-  c.width = c.height = 8;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, 8, 8);
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(4, 4, 4, 4);
-  try {
-    (ctx as any).filter = 'blur(2px)';
-    ctx.drawImage(c, 0, 0);
-    // crude heuristic: after blur the corner shouldn’t be pure white anymore
-    const p = ctx.getImageData(7, 7, 1, 1).data[0];
-    _filterOK = p < 255;
-  } catch {
-    _filterOK = false;
-  }
-  return _filterOK;
-}
 
 async function nextFrame() {
   return new Promise<void>(r => requestAnimationFrame(() => r()));
 }
 
 let modelsPromise: Promise<void> | null = null;
-async function setupTfBackend() {
-  // prefer wasm on mobile; webgl on desktop
-  const isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
-  const tf = (faceapi as any).tf;
-  try {
-    await tf.setBackend(isMobile ? 'wasm' : 'webgl');
-    await tf.ready();
-  } catch {
-    await tf.setBackend('cpu');
-    await tf.ready();
-  }
-}
 function ensureModelsLoaded() {
   if (!modelsPromise) {
-    modelsPromise = (async () => {
-      await setupTfBackend();
-      // tiny first (fast), ssd only if we truly need it later
-      await faceapi.nets.tinyFaceDetector.loadFromUri(
-        '/models/tiny_face_detector'
-      );
-      // lazy-load SSD (don’t await here)
-      faceapi.nets.ssdMobilenetv1
-        .loadFromUri('/models/ssd_mobilenetv1')
-        .catch(() => {});
-    })();
+    modelsPromise = Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri('/models/tiny_face_detector'),
+      faceapi.nets.ssdMobilenetv1.loadFromUri('/models/ssd_mobilenetv1'),
+    ]).then(() => {});
   }
   return modelsPromise;
 }
-function withTimeout<T>(p: Promise<T>, ms = 15000): Promise<T> {
-  return new Promise((res, rej) => {
-    const t = setTimeout(() => rej(new Error('model load timeout')), ms);
-    p.then(
-      v => {
-        clearTimeout(t);
-        res(v);
-      },
-      e => {
-        clearTimeout(t);
-        rej(e);
-      }
-    );
-  });
-}
-function drawBlurApprox(
-  dest: CanvasRenderingContext2D,
-  srcCanvas: HTMLCanvasElement,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  radiusPx: number
-) {
-  // pick a scale factor from radius
-  const k = Math.min(16, Math.max(2, Math.round(radiusPx / 2)));
-  const dw = Math.max(1, Math.floor(w / k));
-  const dh = Math.max(1, Math.floor(h / k));
-  const tmp = document.createElement('canvas');
-  tmp.width = dw;
-  tmp.height = dh;
-  const tctx = tmp.getContext('2d')!;
-  tctx.imageSmoothingEnabled = true;
-  // sample from the destination (already has the base image)
-  tctx.drawImage(srcCanvas, x, y, w, h, 0, 0, dw, dh);
-  dest.save();
-  dest.imageSmoothingEnabled = true;
-  dest.drawImage(tmp, 0, 0, dw, dh, x, y, w, h);
-  dest.restore();
-}
+
 export function useFaceAnonymizer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -113,15 +32,12 @@ export function useFaceAnonymizer() {
   const [mode, setMode] = useState<Mode>('blur');
   const [blurPx, setBlurPx] = useState(12);
   const [pixelSize, setPixelSize] = useState(16);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
 
   const hasImage = !!imgRef.current;
 
   // models
   useEffect(() => {
-    withTimeout(ensureModelsLoaded(), 20000)
-      .then(() => setModelsReady(true))
-      .catch(e => setLoadErr(String(e?.message || e)));
+    ensureModelsLoaded().then(() => setModelsReady(true));
   }, []);
 
   // Redraw
@@ -251,25 +167,24 @@ export function useFaceAnonymizer() {
 
     for (const { x, y, width, height } of boxes) {
       if (mode === 'blur') {
+        //rel.  face area
         const relArea = (width * height) / (img.width * img.height);
+
+        // small faces => higher blur, big faces => less
         let baseBlur = 10 * relArea * 100;
         baseBlur = Math.min(Math.max(baseBlur, 6), 30);
+
         const appliedBlur = baseBlur * (blurPx / 12);
 
-        if (canvasFilterSupported()) {
-          const tmp = document.createElement('canvas');
-          tmp.width = width;
-          tmp.height = height;
-          const tctx = tmp.getContext('2d')!;
-          tctx.drawImage(c, x, y, width, height, 0, 0, width, height);
-          ctx.save();
-          (ctx as any).filter = `blur(${appliedBlur}px)`;
-          ctx.drawImage(tmp, x, y);
-          ctx.restore();
-        } else {
-          // fallback: downscale -> upscale smoothing
-          drawBlurApprox(ctx, c, x, y, width, height, appliedBlur);
-        }
+        const tmp = document.createElement('canvas');
+        tmp.width = width;
+        tmp.height = height;
+        const tctx = tmp.getContext('2d')!;
+        tctx.drawImage(c, x, y, width, height, 0, 0, width, height);
+        ctx.save();
+        ctx.filter = `blur(${appliedBlur}px)`;
+        ctx.drawImage(tmp, x, y);
+        ctx.restore();
       } else if (mode === 'pixelate') {
         const block = Math.max(4, pixelSize);
         const wBlocks = Math.max(1, Math.floor(width / block));
@@ -307,7 +222,6 @@ export function useFaceAnonymizer() {
     // st
     modelsReady,
     busy,
-    loadErr,
     // fileName,
     hasImage,
     mode,

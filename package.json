@@ -16,6 +16,7 @@
     "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@tensorflow/tfjs-backend-webgl": "^4.22.0",
     "classnames": "^2.5.1",
+    "context-filter-polyfill": "^0.3.23",
     "face-api.js": "^0.22.2",
     "next": "^15.1.6",
     "react": "^18.3.1",
