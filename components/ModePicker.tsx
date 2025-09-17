@@ -19,6 +19,16 @@ export default function ModePicker({
       <div className='modeGrid' role='group' aria-label='Anonymization mode'>
         <button
           type='button'
+          className={mode === 'box' ? 'm active' : 'm'}
+          aria-pressed={mode === 'box'}
+          onClick={() => setMode('box')}
+          disabled={disabled}
+        >
+          <BoxIcon />
+          <span className='mLabel'>Box</span>
+        </button>
+        <button
+          type='button'
           className={mode === 'blur' ? 'm active' : 'm'}
           aria-pressed={mode === 'blur'}
           onClick={() => setMode('blur')}
@@ -36,16 +46,6 @@ export default function ModePicker({
         >
           <PixelateIcon />
           <span className='mLabel'>Pixelate</span>
-        </button>
-        <button
-          type='button'
-          className={mode === 'box' ? 'm active' : 'm'}
-          aria-pressed={mode === 'box'}
-          onClick={() => setMode('box')}
-          disabled={disabled}
-        >
-          <BoxIcon />
-          <span className='mLabel'>Box</span>
         </button>
       </div>
     </section>

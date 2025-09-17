@@ -84,7 +84,7 @@ export function useFaceAnonymizer() {
 
   const [modelsReady, setModelsReady] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [mode, setMode] = useState<Mode>('blur');
+  const [mode, setMode] = useState<Mode>('box');
   const [blurPx, setBlurPx] = useState(12);
   const [pixelSize, setPixelSize] = useState(16);
 
@@ -128,7 +128,7 @@ export function useFaceAnonymizer() {
         drawWithMode(img, boxes);
       } finally {
         URL.revokeObjectURL(url);
-        setMode('blur'); // reset
+        setMode('box'); // reset
         setBusy(false);
       }
     };
