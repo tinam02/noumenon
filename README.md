@@ -6,7 +6,7 @@
 In-browser face anonymizer with **Blur**, **Pixelate**, and **Box** modes
 
 
-Built to be an easy, ad-free tool after arrests were made in 🇷🇸 because of carelessly shared protest photos. Runs entirely in-browser, no images leave your device
+Ad free runs entirely in-browser, no images leave your device
 
 ### Blur
 **Crowd**
